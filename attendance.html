@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TimeMaster - לוח שנה</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Assistant:wght@300;400;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Assistant', sans-serif; background: #0f172a; color: white; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; animation: fadeIn 0.3s ease; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .glass { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); }
+        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; }
+        .day-cell { aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 12px; transition: all 0.2s; cursor: pointer; position: relative; }
+        .day-cell:hover { background: rgba(255,255,255,0.1); }
+        .has-data { background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(59, 130, 246, 0.4); }
+        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 100; align-items: center; justify-content: center; padding: 20px; }
+        .modal.active { display: flex; }
+    </style>
+</head>
+<body>
+
+    <div class="max-w-md mx-auto p-6 pb-32">
+        <div class="flex justify-between items-center mb-6">
+            <div class="text-2xl font-black italic">TIME<span class="text-blue-500">PRO</span></div>
+            <div id="live-clock" class="text-sm font-mono opacity-60"></div>
+        </div>
+
+        <div id="main-status" class="bg-gradient-to-br from-blue-600 to-indigo-900 rounded-[2rem] p-6 mb-8 shadow-2xl relative overflow-hidden">
+            <p class="text-xs font-bold opacity-70 uppercase tracking-widest">סטטוס נוכחי</p>
+            <h2 id="timer-display" class="text-5xl font-black my-2">00:00:00</h2>
+            <div class="flex gap-4 mt-4 text-xs opacity-80 border-t border-white/10 pt-4">
+                <span>כניסה: <b id="entry-time">--:--</b></span>
+                <span>יעד: <b id="target-time">--:--</b></span>
+            </div>
+            <div class="absolute -right-4 -bottom-4 w-24 h-24 bg-white/10 rounded-full blur-2xl"></div>
+        </div>
+
+        <nav class="fixed bottom-6 left-6 right-6 max-w-md mx-auto glass rounded-3xl p-2 flex z-50">
+            <button onclick="showTab('scan')" id="nav-scan" class="flex-1 py-3 rounded-2xl font-bold transition-all bg-blue-600">סריקה</button>
+            <button onclick="showTab('calendar')" id="nav-calendar" class="flex-1 py-3 rounded-2xl font-bold transition-all text-slate-400">לוח שנה</button>
+            <button onclick="showTab('qr')" id="nav-qr" class="flex-1 py-3 rounded-2xl font-bold transition-all text-slate-400">קוד QR</button>
+        </nav>
+
+        <div id="scan" class="tab-content active">
+            <div class="glass rounded-[2.5rem] p-4">
+                <div id="reader" class="rounded-3xl overflow-hidden bg-black"></div>
+                <div id="toast" class="mt-4 p-4 rounded-2xl text-center font-bold hidden animate-pulse"></div>
+            </div>
+        </div>
+
+        <div id="calendar" class="tab-content">
+            <div class="glass rounded-[2.5rem] p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <button onclick="changeMonth(-1)" class="p-2">❮</button>
+                    <h3 id="month-label" class="text-xl font-bold">מאי 2026</h3>
+                    <button onclick="changeMonth(1)" class="p-2">❯</button>
+                </div>
+                
+                <div class="grid grid-cols-7 text-center text-[10px] font-bold opacity-40 mb-4 uppercase">
+                    <div>א</div><div>ב</div><div>ג</div><div>ד</div><div>ה</div><div>ו</div><div>ש</div>
+                </div>
+                
+                <div id="calendar-days" class="calendar-grid">
+                    </div>
+                <button onclick="clearData()" class="w-full mt-8 text-[10px] text-red-400 uppercase tracking-widest opacity-50">איפוס נתונים</button>
+            </div>
+        </div>
+
+        <div id="qr" class="tab-content">
+            <div class="glass rounded-[2.5rem] p-10 text-center">
+                <div id="qr-box" class="bg-white p-4 rounded-2xl inline-block mb-6 shadow-xl"></div>
+                <button onclick="downloadQR()" class="w-full bg-white text-slate-900 font-black py-4 rounded-xl">הורד קוד להדפסה</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal" class="modal" onclick="closeModal()">
+        <div class="glass w-full max-w-xs p-8 rounded-[2.5rem] text-center" onclick="event.stopPropagation()">
+            <h4 id="modal-date" class="text-2xl font-black mb-2 text-blue-400">01/05/2026</h4>
+            <div class="space-y-4 my-6">
+                <div class="bg-white/5 p-4 rounded-2xl">
+                    <p class="text-[10px] opacity-50 uppercase">כניסה</p>
+                    <p id="modal-entry" class="text-xl font-bold text-green-400">--:--</p>
+                </div>
+                <div class="bg-white/5 p-4 rounded-2xl">
+                    <p class="text-[10px] opacity-50 uppercase">יציאה</p>
+                    <p id="modal-exit" class="text-xl font-bold text-red-400">--:--</p>
+                </div>
+                <div class="pt-4 border-t border-white/10">
+                    <p class="text-[10px] opacity-50 uppercase">סה"כ שעות</p>
+                    <p id="modal-total" class="text-2xl font-black">--:--</p>
+                </div>
+            </div>
+            <button onclick="closeModal()" class="w-full bg-blue-600 py-3 rounded-xl font-bold">סגור</button>
+        </div>
+    </div>
+
+    <script>
+        let scanner;
+        let currentMonth = new Date();
+        const TARGET_H = 9;
+
+        window.onload = () => {
+            initQR();
+            startScanner();
+            renderCalendar();
+            setInterval(updateHome, 1000);
+        };
+
+        function showTab(id) {
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+            ['scan', 'calendar', 'qr'].forEach(t => {
+                const btn = document.getElementById('nav-' + t);
+                btn.className = (t === id) ? "flex-1 py-3 rounded-2xl font-bold transition-all bg-blue-600 text-white" : "flex-1 py-3 rounded-2xl font-bold transition-all text-slate-400";
+            });
+            if(id === 'scan') startScanner();
+            else if(scanner) scanner.stop();
+        }
+
+        function startScanner() {
+            scanner = new Html5Qrcode("reader");
+            scanner.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, onScanSuccess).catch(()=>{});
+        }
+
+        function onScanSuccess(val) {
+            if (val !== "WORK_CLOCK_SYSTEM") return;
+            const now = new Date();
+            const dateKey = formatDateKey(now);
+            let data = JSON.parse(localStorage.getItem('time_logs') || '{}');
+
+            if (!data[dateKey]) {
+                data[dateKey] = { start: now.getTime(), end: null };
+                notify("כניסה נרשמה!", "bg-green-500");
+            } else if (!data[dateKey].end) {
+                if(now.getTime() - data[dateKey].start < 30000) return;
+                data[dateKey].end = now.getTime();
+                notify("יציאה נרשמה!", "bg-blue-500");
+            } else {
+                notify("כבר רשומה יציאה היום", "bg-slate-600");
+                return;
+            }
+
+            localStorage.setItem('time_logs', JSON.stringify(data));
+            if(navigator.vibrate) navigator.vibrate(100);
+            renderCalendar();
+        }
+
+        function updateHome() {
+            const now = new Date();
+            document.getElementById('live-clock').innerText = now.toLocaleTimeString('he-IL');
+            
+            const data = JSON.parse(localStorage.getItem('time_logs') || '{}');
+            const day = data[formatDateKey(now)];
+
+            if (day && day.start) {
+                const end = day.end || now.getTime();
+                const diff = end - day.start;
+                document.getElementById('timer-display').innerText = formatDiff(diff);
+                document.getElementById('entry-time').innerText = formatT(day.start);
+                document.getElementById('target-time').innerText = formatT(day.start + (TARGET_H * 3600000));
+            }
+        }
+
+        function renderCalendar() {
+            const container = document.getElementById('calendar-days');
+            const label = document.getElementById('month-label');
+            container.innerHTML = '';
+            
+            const year = currentMonth.getFullYear();
+            const month = currentMonth.getMonth();
+            label.innerText = currentMonth.toLocaleDateString('he-IL', { month: 'long', year: 'numeric' });
+
+            const firstDay = new Date(year, month, 1).getDay();
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            const data = JSON.parse(localStorage.getItem('time_logs') || '{}');
+
+            // Empty cells
+            for (let i = 0; i < firstDay; i++) {
+                container.appendChild(document.createElement('div'));
+            }
+
+            // Real days
+            for (let d = 1; d <= daysInMonth; d++) {
+                const dateObj = new Date(year, month, d);
+                const key = formatDateKey(dateObj);
+                const dayData = data[key];
+                
+                const cell = document.createElement('div');
+                cell.className = 'day-cell';
+                if (dayData) cell.classList.add('has-data');
+                
+                cell.innerHTML = `<span class="text-sm font-bold">${d}</span>`;
+                if (dayData && dayData.end) {
+                    const h = Math.floor((dayData.end - dayData.start) / 3600000);
+                    cell.innerHTML += `<span class="text-[8px] text-blue-400 font-black">${h}ש'</span>`;
+                }
+                
+                cell.onclick = () => openModal(key, dayData);
+                container.appendChild(cell);
+            }
+        }
+
+        function openModal(date, info) {
+            if (!info) return;
+            document.getElementById('modal-date').innerText = date;
+            document.getElementById('modal-entry').innerText = formatT(info.start);
+            document.getElementById('modal-exit').innerText = info.end ? formatT(info.end) : '--:--';
+            document.getElementById('modal-total').innerText = info.end ? formatDiff(info.end - info.start) : '--:--';
+            document.getElementById('modal').classList.add('active');
+        }
+
+        function closeModal() { document.getElementById('modal').classList.remove('active'); }
+        function changeMonth(dir) { currentMonth.setMonth(currentMonth.getMonth() + dir); renderCalendar(); }
+        function formatDateKey(d) { return d.toLocaleDateString('he-IL').replace(/\./g, '/'); }
+        function formatT(ts) { return new Date(ts).toLocaleTimeString('he-IL', {hour:'2-digit', minute:'2-digit'}); }
+        function formatDiff(ms) {
+            const h = Math.floor(ms / 3600000);
+            const m = Math.floor((ms % 3600000) / 60000);
+            const s = Math.floor((ms % 60000) / 1000);
+            return `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+        }
+        function notify(msg, cls) {
+            const t = document.getElementById('toast');
+            t.innerText = msg; t.className = `mt-4 p-4 rounded-2xl text-center font-bold block ${cls} text-white`;
+            t.classList.remove('hidden'); setTimeout(() => t.classList.add('hidden'), 3000);
+        }
+        function initQR() { new QRCode(document.getElementById("qr-box"), { text: "WORK_CLOCK_SYSTEM", width: 180, height: 180 }); }
+        function downloadQR() {
+            const l = document.createElement('a'); l.href = document.querySelector('#qr-box canvas').toDataURL();
+            l.download = 'work-qr.png'; l.click();
+        }
+        function clearData() { if(confirm("למחוק הכל?")) { localStorage.clear(); location.reload(); } }
+    </script>
+</body>
+</html>
