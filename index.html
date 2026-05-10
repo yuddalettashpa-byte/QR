@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TimeMaster Pro - Edit Mode</title>
+    <title>TimeMaster Pro - dynamic Breaks</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/html5-qrcode"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -46,9 +46,9 @@
                         <span class="opacity-50 block mb-1">כניסה</span>
                         <b id="entry-time" class="text-sm">--:--</b>
                     </div>
-                    <div class="bg-white/5 p-3 rounded-2xl">
-                        <span class="opacity-50 block mb-1">הפסקה</span>
-                        <b id="break-time-display" class="text-sm">00:00</b>
+                    <div class="bg-white/5 p-3 rounded-2xl border border-amber-500/20">
+                        <span class="opacity-50 block mb-1">זמן הפסקה נוכחי</span>
+                        <b id="break-time-display" class="text-sm text-amber-500">00:00:00</b>
                     </div>
                 </div>
 
@@ -111,7 +111,7 @@
                     <span id="modal-exit" class="font-bold text-red-400"></span>
                 </div>
                 <div class="flex justify-between items-center bg-white/5 p-4 rounded-2xl">
-                    <span class="text-xs opacity-50 uppercase">הפסקות</span>
+                    <span class="text-xs opacity-50 uppercase">סך הפסקות</span>
                     <span id="modal-break" class="font-bold text-amber-500"></span>
                 </div>
                 <div class="flex justify-between items-center bg-blue-500/10 p-4 rounded-2xl border border-blue-500/20">
@@ -219,18 +219,32 @@
             const badge = document.getElementById('current-mode-badge');
             
             if (day && !day.end) {
-                const totalBreak = calculateBreakTime(day.breaks);
-                const elapsed = (day.onBreak ? day.breaks[day.breaks.length-1].start : now.getTime()) - day.start - totalBreak;
-                document.getElementById('timer-display').innerText = formatDiff(elapsed);
+                const totalPastBreaks = calculateBreakTime(day.breaks);
+                const currentBreakStart = day.onBreak ? day.breaks[day.breaks.length-1].start : 0;
+                
+                // חישוב זמן עבודה נטו (לא מחשיב את ההפסקה הנוכחית שרצה)
+                const elapsedWork = (day.onBreak ? currentBreakStart : now.getTime()) - day.start - totalPastBreaks;
+                document.getElementById('timer-display').innerText = formatDiff(elapsedWork);
                 document.getElementById('entry-time').innerText = formatT(day.start);
-                document.getElementById('break-time-display').innerText = formatDiffShort(totalBreak + (day.onBreak ? now.getTime() - day.breaks[day.breaks.length-1].start : 0));
+                
+                // חישוב שעון הפסקה דינמי - מתאפס בכל פעם
+                if (day.onBreak) {
+                    const currentBreakDuration = now.getTime() - currentBreakStart;
+                    document.getElementById('break-time-display').innerText = formatDiff(currentBreakDuration);
+                    badge.innerText = "בהפסקה";
+                    badge.className = "status-badge bg-amber-500/20 text-amber-500";
+                } else {
+                    document.getElementById('break-time-display').innerText = "00:00:00";
+                    badge.innerText = "בעבודה";
+                    badge.className = "status-badge bg-green-500/20 text-green-500";
+                }
+
                 document.getElementById('break-btn').classList.remove('hidden');
                 document.getElementById('break-btn').innerText = day.onBreak ? "חזור לעבוד" : "הפסקה";
                 document.getElementById('manual-btn').innerText = "דווח יציאה";
-                badge.innerText = day.onBreak ? "בהפסקה" : "בעבודה";
-                badge.className = day.onBreak ? "status-badge bg-amber-500/20 text-amber-500" : "status-badge bg-green-500/20 text-green-500";
             } else {
                 document.getElementById('timer-display').innerText = "00:00:00";
+                document.getElementById('break-time-display').innerText = "00:00:00";
                 document.getElementById('break-btn').classList.add('hidden');
                 document.getElementById('manual-btn').innerText = "דיווח כניסה";
                 badge.innerText = "לא פעיל";
@@ -280,10 +294,9 @@
             document.getElementById('modal-date').innerText = key;
             document.getElementById('modal-entry').innerText = info.start ? formatT(info.start) : '--:--';
             document.getElementById('modal-exit').innerText = info.end ? formatT(info.end) : '--:--';
-            document.getElementById('modal-break').innerText = formatDiffShort(totalBreaks);
+            document.getElementById('modal-break').innerText = formatDiff(totalBreaks);
             document.getElementById('modal-total').innerText = formatDiff(netTime);
             
-            // הכנה לעריכה
             if(info.start) document.getElementById('edit-start').value = new Date(info.start).toTimeString().slice(0,5);
             if(info.end) document.getElementById('edit-end').value = new Date(info.end).toTimeString().slice(0,5);
             
@@ -299,19 +312,14 @@
             let data = JSON.parse(localStorage.getItem('time_logs') || '{}');
             const startVal = document.getElementById('edit-start').value;
             const endVal = document.getElementById('edit-end').value;
-            
             if(!startVal) return alert("חובה להזין שעת כניסה");
-
             const [d, m, y] = selectedDayKey.split('/');
             const dateBase = new Date(y, m-1, d);
-            
             const startTs = new Date(dateBase).setHours(...startVal.split(':'));
             const endTs = endVal ? new Date(dateBase).setHours(...endVal.split(':')) : null;
-
             if(!data[selectedDayKey]) data[selectedDayKey] = { breaks: [], onBreak: false };
             data[selectedDayKey].start = startTs;
             data[selectedDayKey].end = endTs;
-
             localStorage.setItem('time_logs', JSON.stringify(data));
             renderCalendar();
             closeModal();
@@ -333,17 +341,20 @@
         function changeMonth(dir) { currentMonth.setMonth(currentMonth.getMonth() + dir); renderCalendar(); }
         function formatDateKey(d) { return d.toLocaleDateString('he-IL').replace(/\./g, '/'); }
         function formatT(ts) { return new Date(ts).toLocaleTimeString('he-IL', {hour:'2-digit', minute:'2-digit'}); }
+        
         function formatDiff(ms) {
             const h = Math.floor(ms / 3600000);
             const m = Math.floor((ms % 3600000) / 60000);
             const s = Math.floor((ms % 60000) / 1000);
             return `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
         }
+        
         function formatDiffShort(ms) {
             const h = Math.floor(ms / 3600000);
             const m = Math.floor((ms % 3600000) / 60000);
             return `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}`;
         }
+
         function notify(msg, cls) {
             const t = document.getElementById('toast');
             t.innerText = msg; t.className = `mt-4 p-4 rounded-2xl text-center font-bold block ${cls} text-white`;
