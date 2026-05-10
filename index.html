@@ -3,113 +3,157 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TimeMaster - לוח שנה</title>
+    <title>TimeMaster Pro - Edit Mode</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/html5-qrcode"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Assistant:wght@300;400;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Assistant:wght@300;400;600;800&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Assistant', sans-serif; background: #0f172a; color: white; }
+        body { font-family: 'Assistant', sans-serif; background: #020617; color: white; min-height: 100vh; }
         .tab-content { display: none; }
-        .tab-content.active { display: block; animation: fadeIn 0.3s ease; }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        .glass { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); }
-        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; }
-        .day-cell { aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 12px; transition: all 0.2s; cursor: pointer; position: relative; }
-        .day-cell:hover { background: rgba(255,255,255,0.1); }
-        .has-data { background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(59, 130, 246, 0.4); }
-        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 100; align-items: center; justify-content: center; padding: 20px; }
+        .tab-content.active { display: block; animation: slideUp 0.4s ease-out; }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .glass { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.1); }
+        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+        .day-cell { aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 12px; transition: all 0.3s; cursor: pointer; border: 1px solid transparent; }
+        .day-cell:hover { background: rgba(59, 130, 246, 0.2); border-color: rgba(59, 130, 246, 0.4); }
+        .has-data { background: rgba(59, 130, 246, 0.1); border-color: rgba(59, 130, 246, 0.3); }
+        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 100; align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(4px); }
         .modal.active { display: flex; }
+        .btn-gradient { background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); transition: transform 0.2s; }
+        .status-badge { padding: 4px 12px; border-radius: 20px; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; }
+        input[type="time"] { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 5px; border-radius: 8px; width: 100%; text-align: center; }
     </style>
 </head>
 <body>
 
-    <div class="max-w-md mx-auto p-6 pb-32">
-        <div class="flex justify-between items-center mb-6">
-            <div class="text-2xl font-black italic">TIME<span class="text-blue-500">PRO</span></div>
-            <div id="live-clock" class="text-sm font-mono opacity-60"></div>
-        </div>
-
-        <div id="main-status" class="bg-gradient-to-br from-blue-600 to-indigo-900 rounded-[2rem] p-6 mb-8 shadow-2xl relative overflow-hidden">
-            <p class="text-xs font-bold opacity-70 uppercase tracking-widest">סטטוס נוכחי</p>
-            <h2 id="timer-display" class="text-5xl font-black my-2">00:00:00</h2>
-            <div class="flex gap-4 mt-4 text-xs opacity-80 border-t border-white/10 pt-4">
-                <span>כניסה: <b id="entry-time">--:--</b></span>
-                <span>יעד: <b id="target-time">--:--</b></span>
+    <div class="max-w-md mx-auto p-6 pb-36">
+        <div class="flex justify-between items-center mb-8">
+            <div>
+                <div class="text-2xl font-black tracking-tighter text-white">TIME<span class="text-blue-500">PRO</span></div>
+                <div id="live-clock" class="text-xs font-mono text-blue-400/60"></div>
             </div>
-            <div class="absolute -right-4 -bottom-4 w-24 h-24 bg-white/10 rounded-full blur-2xl"></div>
+            <div id="current-mode-badge" class="status-badge bg-slate-800 text-slate-400">לא פעיל</div>
         </div>
 
-        <nav class="fixed bottom-6 left-6 right-6 max-w-md mx-auto glass rounded-3xl p-2 flex z-50">
-            <button onclick="showTab('scan')" id="nav-scan" class="flex-1 py-3 rounded-2xl font-bold transition-all bg-blue-600">סריקה</button>
-            <button onclick="showTab('calendar')" id="nav-calendar" class="flex-1 py-3 rounded-2xl font-bold transition-all text-slate-400">לוח שנה</button>
-            <button onclick="showTab('qr')" id="nav-qr" class="flex-1 py-3 rounded-2xl font-bold transition-all text-slate-400">קוד QR</button>
+        <div id="main-status" class="glass rounded-[2.5rem] p-8 mb-8 shadow-2xl relative overflow-hidden border-blue-500/20">
+            <div class="relative z-10">
+                <p class="text-xs font-bold text-blue-400 uppercase tracking-widest mb-1">זמן עבודה נטו</p>
+                <h2 id="timer-display" class="text-6xl font-black mb-6 tracking-tight">00:00:00</h2>
+                
+                <div class="grid grid-cols-2 gap-4 text-xs">
+                    <div class="bg-white/5 p-3 rounded-2xl">
+                        <span class="opacity-50 block mb-1">כניסה</span>
+                        <b id="entry-time" class="text-sm">--:--</b>
+                    </div>
+                    <div class="bg-white/5 p-3 rounded-2xl">
+                        <span class="opacity-50 block mb-1">הפסקה</span>
+                        <b id="break-time-display" class="text-sm">00:00</b>
+                    </div>
+                </div>
+
+                <div class="flex gap-3 mt-6">
+                    <button id="break-btn" onclick="toggleBreak()" class="hidden flex-1 bg-amber-500/20 text-amber-500 border border-amber-500/30 py-3 rounded-xl font-bold text-sm">הפסקה</button>
+                    <button id="manual-btn" onclick="handleManualAction()" class="flex-1 btn-gradient py-3 rounded-xl font-bold text-sm shadow-lg shadow-blue-500/20 text-white">דיווח ידני</button>
+                </div>
+            </div>
+        </div>
+
+        <nav class="fixed bottom-8 left-6 right-6 max-w-md mx-auto glass rounded-3xl p-2 flex z-50 shadow-2xl">
+            <button onclick="showTab('scan')" id="nav-scan" class="flex-1 py-4 rounded-2xl font-bold transition-all bg-blue-600">סריקה</button>
+            <button onclick="showTab('calendar')" id="nav-calendar" class="flex-1 py-4 rounded-2xl font-bold transition-all text-slate-400">לוח שנה</button>
+            <button onclick="showTab('qr')" id="nav-qr" class="flex-1 py-4 rounded-2xl font-bold transition-all text-slate-400">קוד QR</button>
         </nav>
 
-        <div id="scan" class="tab-content active">
+        <div id="scan" class="tab-content active text-center">
             <div class="glass rounded-[2.5rem] p-4">
-                <div id="reader" class="rounded-3xl overflow-hidden bg-black"></div>
-                <div id="toast" class="mt-4 p-4 rounded-2xl text-center font-bold hidden animate-pulse"></div>
+                <div id="reader" class="rounded-3xl overflow-hidden bg-black aspect-square"></div>
+                <div id="toast" class="mt-4 p-4 rounded-2xl text-center font-bold hidden"></div>
             </div>
         </div>
 
         <div id="calendar" class="tab-content">
             <div class="glass rounded-[2.5rem] p-6">
-                <div class="flex justify-between items-center mb-6">
-                    <button onclick="changeMonth(-1)" class="p-2">❮</button>
-                    <h3 id="month-label" class="text-xl font-bold">מאי 2026</h3>
-                    <button onclick="changeMonth(1)" class="p-2">❯</button>
+                <div class="flex justify-between items-center mb-8">
+                    <button onclick="changeMonth(-1)" class="w-10 h-10 flex items-center justify-center bg-white/5 rounded-full">❮</button>
+                    <h3 id="month-label" class="text-xl font-extrabold tracking-tight"></h3>
+                    <button onclick="changeMonth(1)" class="w-10 h-10 flex items-center justify-center bg-white/5 rounded-full">❯</button>
                 </div>
-                
-                <div class="grid grid-cols-7 text-center text-[10px] font-bold opacity-40 mb-4 uppercase">
+                <div class="grid grid-cols-7 text-center text-[11px] font-bold opacity-30 mb-4">
                     <div>א</div><div>ב</div><div>ג</div><div>ד</div><div>ה</div><div>ו</div><div>ש</div>
                 </div>
-                
-                <div id="calendar-days" class="calendar-grid">
-                    </div>
-                <button onclick="clearData()" class="w-full mt-8 text-[10px] text-red-400 uppercase tracking-widest opacity-50">איפוס נתונים</button>
+                <div id="calendar-days" class="calendar-grid"></div>
+                <button onclick="clearData()" class="w-full mt-10 text-[10px] text-red-500/50 font-bold uppercase tracking-widest">איפוס כל המערכת</button>
             </div>
         </div>
 
         <div id="qr" class="tab-content">
             <div class="glass rounded-[2.5rem] p-10 text-center">
-                <div id="qr-box" class="bg-white p-4 rounded-2xl inline-block mb-6 shadow-xl"></div>
-                <button onclick="downloadQR()" class="w-full bg-white text-slate-900 font-black py-4 rounded-xl">הורד קוד להדפסה</button>
+                <div class="bg-white p-6 rounded-3xl inline-block mb-8 shadow-2xl">
+                    <div id="qr-box"></div>
+                </div>
+                <button onclick="downloadQR()" class="w-full bg-white text-slate-900 font-black py-4 rounded-2xl shadow-xl">הורד קוד להדפסה</button>
             </div>
         </div>
     </div>
 
     <div id="modal" class="modal" onclick="closeModal()">
-        <div class="glass w-full max-w-xs p-8 rounded-[2.5rem] text-center" onclick="event.stopPropagation()">
-            <h4 id="modal-date" class="text-2xl font-black mb-2 text-blue-400">01/05/2026</h4>
-            <div class="space-y-4 my-6">
-                <div class="bg-white/5 p-4 rounded-2xl">
-                    <p class="text-[10px] opacity-50 uppercase">כניסה</p>
-                    <p id="modal-entry" class="text-xl font-bold text-green-400">--:--</p>
+        <div class="glass w-full max-w-xs p-8 rounded-[2.5rem] text-center shadow-2xl border-white/20" onclick="event.stopPropagation()">
+            <h4 id="modal-date" class="text-2xl font-black mb-6 text-blue-400"></h4>
+            
+            <div id="modal-view-mode" class="space-y-3 mb-6">
+                <div class="flex justify-between items-center bg-white/5 p-4 rounded-2xl">
+                    <span class="text-xs opacity-50 uppercase">כניסה</span>
+                    <span id="modal-entry" class="font-bold text-green-400"></span>
                 </div>
-                <div class="bg-white/5 p-4 rounded-2xl">
-                    <p class="text-[10px] opacity-50 uppercase">יציאה</p>
-                    <p id="modal-exit" class="text-xl font-bold text-red-400">--:--</p>
+                <div class="flex justify-between items-center bg-white/5 p-4 rounded-2xl">
+                    <span class="text-xs opacity-50 uppercase">יציאה</span>
+                    <span id="modal-exit" class="font-bold text-red-400"></span>
                 </div>
-                <div class="pt-4 border-t border-white/10">
-                    <p class="text-[10px] opacity-50 uppercase">סה"כ שעות</p>
-                    <p id="modal-total" class="text-2xl font-black">--:--</p>
+                <div class="flex justify-between items-center bg-white/5 p-4 rounded-2xl">
+                    <span class="text-xs opacity-50 uppercase">הפסקות</span>
+                    <span id="modal-break" class="font-bold text-amber-500"></span>
+                </div>
+                <div class="flex justify-between items-center bg-blue-500/10 p-4 rounded-2xl border border-blue-500/20">
+                    <span class="text-xs text-blue-400 font-bold uppercase">סה"כ נטו</span>
+                    <span id="modal-total" class="font-black text-xl"></span>
+                </div>
+                <div class="grid grid-cols-2 gap-2 mt-4">
+                    <button onclick="toggleEditMode(true)" class="bg-blue-600/20 text-blue-400 py-3 rounded-xl font-bold text-sm">ערוך יום</button>
+                    <button onclick="resetDay()" class="bg-red-600/20 text-red-400 py-3 rounded-xl font-bold text-sm">אפס יום</button>
                 </div>
             </div>
-            <button onclick="closeModal()" class="w-full bg-blue-600 py-3 rounded-xl font-bold">סגור</button>
+
+            <div id="modal-edit-mode" class="hidden space-y-4 mb-6">
+                <div>
+                    <label class="text-[10px] opacity-50 block mb-1">שעת כניסה</label>
+                    <input type="time" id="edit-start">
+                </div>
+                <div>
+                    <label class="text-[10px] opacity-50 block mb-1">שעת יציאה</label>
+                    <input type="time" id="edit-end">
+                </div>
+                <div class="grid grid-cols-2 gap-2 pt-4">
+                    <button onclick="saveDayEdit()" class="bg-green-600 py-3 rounded-xl font-bold text-sm">שמור</button>
+                    <button onclick="toggleEditMode(false)" class="bg-slate-700 py-3 rounded-xl font-bold text-sm">ביטול</button>
+                </div>
+            </div>
+
+            <button onclick="closeModal()" class="w-full bg-slate-800 py-4 rounded-2xl font-bold text-slate-400">סגור</button>
         </div>
     </div>
 
     <script>
         let scanner;
         let currentMonth = new Date();
-        const TARGET_H = 9;
+        let selectedDayKey = null;
+        const WORK_CODE = "WORK_CLOCK_SYSTEM";
 
         window.onload = () => {
             initQR();
             startScanner();
             renderCalendar();
-            setInterval(updateHome, 1000);
+            setInterval(updateUI, 1000);
         };
 
         function showTab(id) {
@@ -117,102 +161,172 @@
             document.getElementById(id).classList.add('active');
             ['scan', 'calendar', 'qr'].forEach(t => {
                 const btn = document.getElementById('nav-' + t);
-                btn.className = (t === id) ? "flex-1 py-3 rounded-2xl font-bold transition-all bg-blue-600 text-white" : "flex-1 py-3 rounded-2xl font-bold transition-all text-slate-400";
+                btn.className = (t === id) ? "flex-1 py-4 rounded-2xl font-bold transition-all bg-blue-600 text-white shadow-lg" : "flex-1 py-4 rounded-2xl font-bold transition-all text-slate-400";
             });
             if(id === 'scan') startScanner();
-            else if(scanner) scanner.stop();
+            else if(scanner) scanner.stop().catch(()=>{});
         }
 
         function startScanner() {
             scanner = new Html5Qrcode("reader");
-            scanner.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, onScanSuccess).catch(()=>{});
+            scanner.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, (val) => processAction(val)).catch(()=>{});
         }
 
-        function onScanSuccess(val) {
-            if (val !== "WORK_CLOCK_SYSTEM") return;
-            const now = new Date();
-            const dateKey = formatDateKey(now);
+        function handleManualAction() { processAction(WORK_CODE); }
+
+        function processAction(val) {
+            if (val !== WORK_CODE) return;
+            const now = new Date().getTime();
+            const dateKey = formatDateKey(new Date());
             let data = JSON.parse(localStorage.getItem('time_logs') || '{}');
 
             if (!data[dateKey]) {
-                data[dateKey] = { start: now.getTime(), end: null };
-                notify("כניסה נרשמה!", "bg-green-500");
+                data[dateKey] = { start: now, end: null, breaks: [], onBreak: false };
+                notify("כניסה נרשמה", "bg-green-500");
             } else if (!data[dateKey].end) {
-                if(now.getTime() - data[dateKey].start < 30000) return;
-                data[dateKey].end = now.getTime();
-                notify("יציאה נרשמה!", "bg-blue-500");
+                if(data[dateKey].onBreak) toggleBreak();
+                data[dateKey].end = now;
+                notify("יציאה נרשמה", "bg-blue-500");
             } else {
-                notify("כבר רשומה יציאה היום", "bg-slate-600");
-                return;
+                notify("היום כבר דווח", "bg-slate-600");
             }
-
             localStorage.setItem('time_logs', JSON.stringify(data));
-            if(navigator.vibrate) navigator.vibrate(100);
             renderCalendar();
         }
 
-        function updateHome() {
+        function toggleBreak() {
+            const dateKey = formatDateKey(new Date());
+            let data = JSON.parse(localStorage.getItem('time_logs') || '{}');
+            const day = data[dateKey];
+            if (!day || day.end) return;
+            const now = new Date().getTime();
+            if (!day.onBreak) {
+                day.breaks.push({ start: now, end: null });
+                day.onBreak = true;
+            } else {
+                const currentBreak = day.breaks.find(b => b.end === null);
+                if (currentBreak) currentBreak.end = now;
+                day.onBreak = false;
+            }
+            localStorage.setItem('time_logs', JSON.stringify(data));
+        }
+
+        function updateUI() {
             const now = new Date();
             document.getElementById('live-clock').innerText = now.toLocaleTimeString('he-IL');
-            
             const data = JSON.parse(localStorage.getItem('time_logs') || '{}');
             const day = data[formatDateKey(now)];
-
-            if (day && day.start) {
-                const end = day.end || now.getTime();
-                const diff = end - day.start;
-                document.getElementById('timer-display').innerText = formatDiff(diff);
+            const badge = document.getElementById('current-mode-badge');
+            
+            if (day && !day.end) {
+                const totalBreak = calculateBreakTime(day.breaks);
+                const elapsed = (day.onBreak ? day.breaks[day.breaks.length-1].start : now.getTime()) - day.start - totalBreak;
+                document.getElementById('timer-display').innerText = formatDiff(elapsed);
                 document.getElementById('entry-time').innerText = formatT(day.start);
-                document.getElementById('target-time').innerText = formatT(day.start + (TARGET_H * 3600000));
+                document.getElementById('break-time-display').innerText = formatDiffShort(totalBreak + (day.onBreak ? now.getTime() - day.breaks[day.breaks.length-1].start : 0));
+                document.getElementById('break-btn').classList.remove('hidden');
+                document.getElementById('break-btn').innerText = day.onBreak ? "חזור לעבוד" : "הפסקה";
+                document.getElementById('manual-btn').innerText = "דווח יציאה";
+                badge.innerText = day.onBreak ? "בהפסקה" : "בעבודה";
+                badge.className = day.onBreak ? "status-badge bg-amber-500/20 text-amber-500" : "status-badge bg-green-500/20 text-green-500";
+            } else {
+                document.getElementById('timer-display').innerText = "00:00:00";
+                document.getElementById('break-btn').classList.add('hidden');
+                document.getElementById('manual-btn').innerText = "דיווח כניסה";
+                badge.innerText = "לא פעיל";
+                badge.className = "status-badge bg-slate-800 text-slate-400";
             }
+        }
+
+        function calculateBreakTime(breaks) {
+            if (!breaks) return 0;
+            return breaks.reduce((total, b) => total + (b.end ? (b.end - b.start) : 0), 0);
         }
 
         function renderCalendar() {
             const container = document.getElementById('calendar-days');
-            const label = document.getElementById('month-label');
             container.innerHTML = '';
-            
             const year = currentMonth.getFullYear();
             const month = currentMonth.getMonth();
-            label.innerText = currentMonth.toLocaleDateString('he-IL', { month: 'long', year: 'numeric' });
-
+            document.getElementById('month-label').innerText = currentMonth.toLocaleDateString('he-IL', { month: 'long', year: 'numeric' });
             const firstDay = new Date(year, month, 1).getDay();
             const daysInMonth = new Date(year, month + 1, 0).getDate();
             const data = JSON.parse(localStorage.getItem('time_logs') || '{}');
 
-            // Empty cells
-            for (let i = 0; i < firstDay; i++) {
-                container.appendChild(document.createElement('div'));
-            }
-
-            // Real days
+            for (let i = 0; i < firstDay; i++) container.appendChild(document.createElement('div'));
             for (let d = 1; d <= daysInMonth; d++) {
-                const dateObj = new Date(year, month, d);
-                const key = formatDateKey(dateObj);
+                const key = formatDateKey(new Date(year, month, d));
                 const dayData = data[key];
-                
                 const cell = document.createElement('div');
-                cell.className = 'day-cell';
-                if (dayData) cell.classList.add('has-data');
-                
-                cell.innerHTML = `<span class="text-sm font-bold">${d}</span>`;
+                cell.className = 'day-cell' + (dayData ? ' has-data' : '');
+                let content = `<span class="text-sm font-bold ${dayData ? 'text-blue-400' : 'opacity-40'}">${d}</span>`;
                 if (dayData && dayData.end) {
-                    const h = Math.floor((dayData.end - dayData.start) / 3600000);
-                    cell.innerHTML += `<span class="text-[8px] text-blue-400 font-black">${h}ש'</span>`;
+                    const net = dayData.end - dayData.start - calculateBreakTime(dayData.breaks);
+                    content += `<span class="text-[9px] font-black mt-1">${Math.floor(net/3600000)}:${Math.floor((net%3600000)/60000).toString().padStart(2,'0')}</span>`;
                 }
-                
+                cell.innerHTML = content;
                 cell.onclick = () => openModal(key, dayData);
                 container.appendChild(cell);
             }
         }
 
-        function openModal(date, info) {
-            if (!info) return;
-            document.getElementById('modal-date').innerText = date;
-            document.getElementById('modal-entry').innerText = formatT(info.start);
+        function openModal(key, data) {
+            selectedDayKey = key;
+            toggleEditMode(false);
+            const info = data || { start: null, end: null, breaks: [] };
+            const totalBreaks = calculateBreakTime(info.breaks);
+            const netTime = info.end ? (info.end - info.start - totalBreaks) : 0;
+            
+            document.getElementById('modal-date').innerText = key;
+            document.getElementById('modal-entry').innerText = info.start ? formatT(info.start) : '--:--';
             document.getElementById('modal-exit').innerText = info.end ? formatT(info.end) : '--:--';
-            document.getElementById('modal-total').innerText = info.end ? formatDiff(info.end - info.start) : '--:--';
+            document.getElementById('modal-break').innerText = formatDiffShort(totalBreaks);
+            document.getElementById('modal-total').innerText = formatDiff(netTime);
+            
+            // הכנה לעריכה
+            if(info.start) document.getElementById('edit-start').value = new Date(info.start).toTimeString().slice(0,5);
+            if(info.end) document.getElementById('edit-end').value = new Date(info.end).toTimeString().slice(0,5);
+            
             document.getElementById('modal').classList.add('active');
+        }
+
+        function toggleEditMode(isEdit) {
+            document.getElementById('modal-view-mode').classList.toggle('hidden', isEdit);
+            document.getElementById('modal-edit-mode').classList.toggle('hidden', !isEdit);
+        }
+
+        function saveDayEdit() {
+            let data = JSON.parse(localStorage.getItem('time_logs') || '{}');
+            const startVal = document.getElementById('edit-start').value;
+            const endVal = document.getElementById('edit-end').value;
+            
+            if(!startVal) return alert("חובה להזין שעת כניסה");
+
+            const [d, m, y] = selectedDayKey.split('/');
+            const dateBase = new Date(y, m-1, d);
+            
+            const startTs = new Date(dateBase).setHours(...startVal.split(':'));
+            const endTs = endVal ? new Date(dateBase).setHours(...endVal.split(':')) : null;
+
+            if(!data[selectedDayKey]) data[selectedDayKey] = { breaks: [], onBreak: false };
+            data[selectedDayKey].start = startTs;
+            data[selectedDayKey].end = endTs;
+
+            localStorage.setItem('time_logs', JSON.stringify(data));
+            renderCalendar();
+            closeModal();
+            notify("עודכן בהצלחה", "bg-blue-500");
+        }
+
+        function resetDay() {
+            if(confirm("לאפס את נתוני היום הזה?")) {
+                let data = JSON.parse(localStorage.getItem('time_logs') || '{}');
+                delete data[selectedDayKey];
+                localStorage.setItem('time_logs', JSON.stringify(data));
+                renderCalendar();
+                closeModal();
+                notify("היום אופס", "bg-red-500");
+            }
         }
 
         function closeModal() { document.getElementById('modal').classList.remove('active'); }
@@ -225,15 +339,20 @@
             const s = Math.floor((ms % 60000) / 1000);
             return `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
         }
+        function formatDiffShort(ms) {
+            const h = Math.floor(ms / 3600000);
+            const m = Math.floor((ms % 3600000) / 60000);
+            return `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}`;
+        }
         function notify(msg, cls) {
             const t = document.getElementById('toast');
             t.innerText = msg; t.className = `mt-4 p-4 rounded-2xl text-center font-bold block ${cls} text-white`;
             t.classList.remove('hidden'); setTimeout(() => t.classList.add('hidden'), 3000);
         }
-        function initQR() { new QRCode(document.getElementById("qr-box"), { text: "WORK_CLOCK_SYSTEM", width: 180, height: 180 }); }
+        function initQR() { new QRCode(document.getElementById("qr-box"), { text: WORK_CODE, width: 200, height: 200 }); }
         function downloadQR() {
-            const l = document.createElement('a'); l.href = document.querySelector('#qr-box canvas').toDataURL();
-            l.download = 'work-qr.png'; l.click();
+            const canvas = document.querySelector('#qr-box canvas');
+            const l = document.createElement('a'); l.href = canvas.toDataURL(); l.download = 'qr.png'; l.click();
         }
         function clearData() { if(confirm("למחוק הכל?")) { localStorage.clear(); location.reload(); } }
     </script>
